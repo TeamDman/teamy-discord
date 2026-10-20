@@ -472,11 +472,10 @@ fn overall_progress_metrics(
         (observed_messages / u64::try_from(started_target_count).unwrap_or(1))
             .max(FALLBACK_ESTIMATED_MESSAGES_PER_TARGET)
     };
-    let fallback_bytes_per_message = if observed_messages == 0 {
-        FALLBACK_ESTIMATED_BYTES_PER_MESSAGE
-    } else {
-        (observed_bytes / observed_messages).max(FALLBACK_ESTIMATED_BYTES_PER_MESSAGE)
-    };
+    let fallback_bytes_per_message = observed_bytes
+        .checked_div(observed_messages)
+        .unwrap_or(FALLBACK_ESTIMATED_BYTES_PER_MESSAGE)
+        .max(FALLBACK_ESTIMATED_BYTES_PER_MESSAGE);
 
     let mut estimated_messages_total = 0_u64;
     let mut estimated_bytes_total = 0_u64;
@@ -867,7 +866,7 @@ fn scan_target_checkpoint(
 
         archived_message_count = archived_message_count.saturating_add(1);
         archived_byte_count = archived_byte_count
-            .saturating_add(entry.metadata().map(|metadata| metadata.len()).unwrap_or(0));
+            .saturating_add(entry.metadata().map_or(0, |metadata| metadata.len()));
         newest_message_id =
             Some(newest_message_id.map_or(message_id, |current: u64| current.max(message_id)));
         oldest_message_id =
@@ -2560,7 +2559,9 @@ mod tests {
             }],
         };
         let tracker = SyncProgressTracker {
-            started_at: Instant::now() - std::time::Duration::from_secs(10),
+            started_at: Instant::now()
+                .checked_sub(std::time::Duration::from_secs(10))
+                .expect("test clock has sufficient history"),
             targets_total: 2,
             resumed_targets: 1,
             targets_completed: 0,

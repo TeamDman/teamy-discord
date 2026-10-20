@@ -9,6 +9,9 @@ fn main() {
 fn add_exe_resources() {
     println!("cargo:rerun-if-changed=resources");
 
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
     embed_resource::compile("resources/app.rc", embed_resource::NONE)
         .manifest_required()
         .expect("failed to embed resources");
@@ -28,5 +31,5 @@ fn add_git_revision() {
         .and_then(|v| String::from_utf8(v).ok())
         .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string());
 
-    println!("cargo:rustc-env=GIT_REVISION={rev}",);
+    println!("cargo:rustc-env=GIT_REVISION={rev}");
 }

@@ -12,8 +12,14 @@ impl HomeOpenArgs {
     ///
     /// This function will return an error if the home directory cannot be created
     /// or the file manager cannot be launched.
+    pub async fn invoke(self) -> Result<crate::cli::output::CliOutput> {
+        let threshold = Some(std::time::Duration::from_secs(3));
+        self.invoke_work().await?;
+        Ok(crate::cli::output::CliOutput::none(threshold))
+    }
+
     #[expect(clippy::unused_async)]
-    pub async fn invoke(self) -> Result<()> {
+    async fn invoke_work(self) -> Result<()> {
         crate::paths::APP_HOME.ensure_dir()?;
         open::that_detached(crate::paths::APP_HOME.0.as_path()).wrap_err_with(|| {
             format!(

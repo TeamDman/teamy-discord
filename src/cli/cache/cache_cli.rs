@@ -31,13 +31,11 @@ impl CacheArgs {
     /// # Errors
     ///
     /// This function will return an error if the subcommand fails.
-    pub async fn invoke(self) -> Result<()> {
+    pub async fn invoke(self) -> Result<crate::cli::output::CliOutput> {
         match self.command {
-            CacheCommand::Clean(args) => args.invoke().await?,
-            CacheCommand::Open(args) => args.invoke().await?,
-            CacheCommand::Show(args) => args.invoke().await?,
+            CacheCommand::Clean(args) => args.invoke().await,
+            CacheCommand::Open(args) => args.invoke().await,
+            CacheCommand::Show(args) => args.invoke().await,
         }
-
-        Ok(())
     }
 }

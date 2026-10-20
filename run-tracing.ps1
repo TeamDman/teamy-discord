@@ -142,7 +142,7 @@ if (-not (Get-Command tracy-profiler.exe -ErrorAction SilentlyContinue)) {
 }
 
 if (-not $QueryArgs -or $QueryArgs.Count -eq 0) {
-	$QueryArgs = @("output-dir", "show")
+	$QueryArgs = @("archive", "output-dir", "show")
 }
 
 Write-Host "Capture: $capturePath"

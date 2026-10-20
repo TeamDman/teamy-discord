@@ -1,6 +1,6 @@
 # Tool Standards
 
-This document translates the applicable command-line and logging standards into local tracey requirements for `teamy-discord-archive`.
+This document translates the applicable command-line and logging standards into local tracey requirements for `teamy-discord`.
 
 ## Command Line Interface
 

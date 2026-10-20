@@ -1,34 +1,40 @@
-pub mod bot_token;
+pub mod archive;
+pub mod attachment;
 pub mod cache;
+pub mod channel;
 pub mod facet_shape;
 pub mod global_args;
+pub mod guild;
 pub mod home;
 pub mod invite;
-pub mod live;
-pub mod output_dir;
-pub mod sync;
+pub mod log_format;
+pub mod message;
+pub mod output;
+pub mod profile;
+pub mod thread;
+pub mod user;
+pub mod watch;
 
-use crate::cli::bot_token::BotTokenArgs;
 use crate::cli::cache::CacheArgs;
 use crate::cli::global_args::GlobalArgs;
 use crate::cli::home::HomeArgs;
 use crate::cli::invite::InviteArgs;
-use crate::cli::live::LiveArgs;
-use crate::cli::output_dir::OutputDirArgs;
-use crate::cli::sync::SyncArgs;
 use arbitrary::Arbitrary;
 use eyre::Context;
 use facet::Facet;
 use figue::FigueBuiltins;
 use figue::{self as args};
 
-/// Archive Discord guild content to the local filesystem.
+/// Query Discord using local profiles and archive content to the filesystem.
 ///
 /// Environment variables:
-/// - `TEAMY_DISCORD_ARCHIVE_HOME_DIR` overrides the resolved application home directory.
-/// - `TEAMY_DISCORD_ARCHIVE_CACHE_DIR` overrides the resolved cache directory.
-/// - `TEAMY_DISCORD_ARCHIVE_DISCORD_BOT_TOKEN` supplies the Discord bot token for `bot-token`, `invite`, and `live` commands.
-/// - `TEAMY_DISCORD_ARCHIVE_OUTPUT_DIR` overrides the persisted output directory preference.
+/// - `TEAMY_DISCORD_HOME_DIR` overrides the resolved application home directory.
+/// - `TEAMY_DISCORD_CACHE_DIR` overrides the resolved cache directory.
+/// - `TEAMY_DISCORD_BOT_TOKEN` supplies the Discord bot token for commands that contact Discord.
+/// - `TEAMY_DISCORD_OUTPUT_DIR` overrides the persisted output directory preference.
+/// - Legacy noncredential names remain fallback inputs; token aliases conflict if both set.
+/// - Live queries default to broker memory; configure `TEAMY_DISCORD_BROKER_ACCOUNT` and `TEAMY_DISCORD_BROKER_SECRET_REF`.
+/// - `TEAMY_DISCORD_CREDENTIAL_PROVIDER` selects an explicit provider; no plaintext token fallback.
 /// - `RUST_LOG` provides a tracing filter when `--log-filter` is omitted.
 // cli[impl parser.args-consistent]
 // cli[impl parser.roundtrip]
@@ -63,23 +69,20 @@ impl Cli {
     /// # Errors
     ///
     /// This function will return an error if the tokio runtime cannot be built or if the command fails.
-    pub fn invoke(self) -> eyre::Result<()> {
+    pub fn invoke(self) -> eyre::Result<crate::cli::output::CliOutput> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .wrap_err("Failed to build tokio runtime")?;
-        runtime.block_on(async move { self.command.invoke().await })?;
-        Ok(())
+        runtime.block_on(async move { self.command.invoke().await })
     }
 }
 
-/// The archive CLI command surface.
+/// Discord queries, local profiles and archival operations.
 // cli[impl command.surface.core]
 #[derive(Facet, Arbitrary, Debug, PartialEq)]
 #[repr(u8)]
 pub enum Command {
-    /// Discord bot token preference commands.
-    BotToken(BotTokenArgs),
     /// Cache-related commands.
     Cache(CacheArgs),
     /// Home-related commands.
@@ -87,28 +90,44 @@ pub enum Command {
     /// Print and optionally open the Discord bot invite URL.
     // cli[impl command.surface.invite]
     Invite(InviteArgs),
-    /// Query live Discord data through the bot token.
-    Live(LiveArgs),
-    /// Output directory preference commands.
-    OutputDir(OutputDirArgs),
-    /// Synchronize Discord content into the configured output directory.
-    // cli[impl command.surface.sync]
-    Sync(SyncArgs),
+    /// Query channels in the selected guild.
+    Channel(crate::cli::channel::ChannelArgs),
+    /// Query messages in the selected channel or thread.
+    Message(crate::cli::message::MessageArgs),
+    /// Query active threads in the selected guild.
+    Thread(crate::cli::thread::ThreadArgs),
+    /// Query guild users.
+    User(crate::cli::user::UserArgs),
+    /// Query guilds visible to the bot.
+    Guild(crate::cli::guild::GuildArgs),
+    /// Query attachments on messages.
+    Attachment(crate::cli::attachment::AttachmentArgs),
+    /// Manage nonsecret local defaults.
+    Profile(crate::cli::profile::ProfileArgs),
+    /// Archive sync, checkpoints and output location.
+    Archive(crate::cli::archive::ArchiveArgs),
+    /// Foreground read-only capture daemon and lightweight acknowledged IPC consumers.
+    Watch(crate::cli::watch::WatchArgs),
 }
 
 impl Command {
     /// # Errors
     ///
     /// This function will return an error if the subcommand fails.
-    pub async fn invoke(self) -> eyre::Result<()> {
+    pub async fn invoke(self) -> eyre::Result<crate::cli::output::CliOutput> {
         match self {
-            Command::BotToken(args) => args.invoke().await,
             Command::Cache(args) => args.invoke().await,
             Command::Home(args) => args.invoke().await,
             Command::Invite(args) => args.invoke().await,
-            Command::Live(args) => args.invoke().await,
-            Command::OutputDir(args) => args.invoke().await,
-            Command::Sync(args) => args.invoke().await,
+            Command::Channel(args) => args.invoke().await,
+            Command::Message(args) => args.invoke().await,
+            Command::Thread(args) => args.invoke().await,
+            Command::User(args) => args.invoke().await,
+            Command::Guild(args) => args.invoke().await,
+            Command::Attachment(args) => args.invoke().await,
+            Command::Profile(args) => args.invoke(),
+            Command::Archive(args) => args.invoke().await,
+            Command::Watch(args) => args.invoke().await,
         }
     }
 }

@@ -1,18 +1,19 @@
 [package]
-name = "teamy-discord-archive"
+name = "teamy-discord"
 version = "0.1.0"
 edition = "2024"
 authors = ["TeamDman"]
 # repo[impl description.meaningful]
-description = "CLI tooling for archiving Discord guild content to the local filesystem"
+description = "Profile-aware Discord queries and local archival tooling"
 license = "MPL-2.0"
 readme = "README.md"
-repository = "https://github.com/TeamDman/teamy-discord-archive"
+repository = "https://github.com/TeamDman/teamy-discord"
 keywords = ["cli","discord","archive"]
 categories = ["command-line-utilities"]
-documentation = "https://github.com/TeamDman/teamy-discord-archive" # "https://docs.rs/crate/abc"
+documentation = "https://github.com/TeamDman/teamy-discord" # "https://docs.rs/crate/abc"
 
 [dependencies]
+zeroize = "1.8"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 chrono = "0.4"
 color-eyre = "0.6.5"
@@ -20,20 +21,25 @@ eyre = "0.6.12"
 facet-json = "0.44.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serenity = { version = "0.12.5", default-features = false, features = ["http", "model", "rustls_backend"] }
+serenity = { version = "0.12.5", default-features = false, features = ["http", "model", "rustls_backend", "client", "gateway"] }
 reqwest = "0.12.28"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
-tracing-tracy = { version = "0.11", optional = true }
+tracing-tracy = { version = "0.11", optional = true, default-features = false, features = ["enable", "system-tracing", "context-switch-tracing", "sampling", "code-transfer", "callstack-inlines", "only-localhost"] }
 directories-next = "2"
 tokio = { version = "1.49.0", features = ["full"] }
 facet = "0.44.1"
 figue = { package = "teamy-figue", version = "2.0.1", features = ["arbitrary"] }
 open = "5"
 sha2 = "0.10"
+# Existing pinned UUID package: nonsecret IPC correlation and delivery identifiers.
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
+teamy-broker-sdk = { path = "../teamy-broker/sdk" }
 teamy-windows = "0.9.0"
+# Existing pinned Windows bindings: owner-only named-pipe ACL and peer-token verification.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Pipes"] }
 
 [features]
 default = []
@@ -43,6 +49,8 @@ tracy = ["dep:tracing-tracy"]
 embed-resource = "3.0.6"
 
 [dev-dependencies]
+# Existing Tokio package: deterministic cancellation and retry tests.
+tokio = { version = "1.49.0", features = ["test-util"] }
 tempfile = "3"
 
 [lints.rust]

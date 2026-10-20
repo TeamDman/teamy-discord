@@ -28,12 +28,10 @@ impl HomeArgs {
     /// # Errors
     ///
     /// This function will return an error if the subcommand fails.
-    pub async fn invoke(self) -> Result<()> {
+    pub async fn invoke(self) -> Result<crate::cli::output::CliOutput> {
         match self.command {
-            HomeCommand::Open(args) => args.invoke().await?,
-            HomeCommand::Show(args) => args.invoke().await?,
+            HomeCommand::Open(args) => args.invoke().await,
+            HomeCommand::Show(args) => args.invoke().await,
         }
-
-        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 # Archive Goals
 
-This specification captures the product-specific archival goals for `teamy-discord-archive`.
+This specification captures the product-specific archival goals for `teamy-discord`.
 
 archive[goal.lossless-raw-payloads]
 The archiver must preserve raw Discord message payloads losslessly so that later transformations remain additive rather than destructive.

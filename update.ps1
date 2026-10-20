@@ -1,1 +1,1 @@
-cargo install --path .
+cargo install --locked --path . --bin teamy-discord

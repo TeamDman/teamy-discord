@@ -108,7 +108,10 @@ pub fn resolve_output_dir_from_sources(
 
 #[must_use]
 pub fn load_output_dir_from_environment() -> Option<PathBuf> {
-    load_output_dir_from_environment_value(std::env::var(super::OUTPUT_DIR_ENV_VAR).ok().as_deref())
+    load_output_dir_from_environment_value(
+        super::environment_preference(super::OUTPUT_DIR_ENV_VAR, super::LEGACY_OUTPUT_DIR_ENV_VAR)
+            .as_deref(),
+    )
 }
 
 #[must_use]
@@ -126,11 +129,23 @@ pub fn resolve_output_dir_with(
     environment_value: Option<&str>,
 ) -> eyre::Result<ResolvedOutputDir> {
     let environment = load_output_dir_from_environment_value(environment_value);
+    if let Some(path) = command_line {
+        return Ok(ResolvedOutputDir {
+            path,
+            source: OutputDirSource::CommandLine,
+        });
+    }
+    if let Some(path) = environment {
+        return Ok(ResolvedOutputDir {
+            path,
+            source: OutputDirSource::Environment,
+        });
+    }
     let preference = load_output_dir_preference(app_home)?;
 
-    resolve_output_dir_from_sources(command_line, environment, preference).ok_or_else(|| {
+    resolve_output_dir_from_sources(None, None, preference).ok_or_else(|| {
         eyre::eyre!(
-            "No output directory configured. Use `output-dir set <path>`, set `{}`, or pass `--output-dir <path>`." ,
+            "No output directory configured. Use `archive output-dir set <path>`, set `{}`, or pass `--output-dir <path>`." ,
             super::OUTPUT_DIR_ENV_VAR
         )
     })
@@ -144,7 +159,8 @@ pub fn resolve_output_dir(command_line: Option<PathBuf>) -> eyre::Result<Resolve
     resolve_output_dir_with(
         &super::APP_HOME,
         command_line,
-        std::env::var(super::OUTPUT_DIR_ENV_VAR).ok().as_deref(),
+        super::environment_preference(super::OUTPUT_DIR_ENV_VAR, super::LEGACY_OUTPUT_DIR_ENV_VAR)
+            .as_deref(),
     )
 }
 
@@ -170,7 +186,8 @@ pub fn require_output_dir(command_line: Option<PathBuf>) -> eyre::Result<Resolve
     require_output_dir_with(
         &super::APP_HOME,
         command_line,
-        std::env::var(super::OUTPUT_DIR_ENV_VAR).ok().as_deref(),
+        super::environment_preference(super::OUTPUT_DIR_ENV_VAR, super::LEGACY_OUTPUT_DIR_ENV_VAR)
+            .as_deref(),
     )
 }
 
@@ -182,6 +199,7 @@ mod tests {
     use super::load_output_dir_preference;
     use super::require_output_dir_with;
     use super::resolve_output_dir_from_sources;
+    use super::resolve_output_dir_with;
     use super::save_output_dir_preference;
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -267,5 +285,20 @@ mod tests {
 
         assert_eq!(resolved.path, PathBuf::from("cli-output"));
         assert_eq!(resolved.source, OutputDirSource::CommandLine);
+    }
+    #[test]
+    fn output_override_never_reads_or_relocates_saved_preference() {
+        let dir = tempdir().unwrap();
+        let home = AppHome(dir.path().to_owned());
+        std::fs::create_dir(home.file_path("output-dir.txt")).unwrap();
+        let target = dir.path().join("existing-archive");
+        let resolved = resolve_output_dir_with(&home, Some(target.clone()), None).unwrap();
+        assert_eq!(resolved.path, target);
+        assert_eq!(resolved.source, OutputDirSource::CommandLine);
+        assert!(!target.exists());
+        let resolved = resolve_output_dir_with(&home, None, Some("synthetic-archive")).unwrap();
+        assert_eq!(resolved.source, OutputDirSource::Environment);
+        let error = resolve_output_dir_with(&home, None, None).unwrap_err();
+        assert!(error.to_string().contains("Failed to read"));
     }
 }

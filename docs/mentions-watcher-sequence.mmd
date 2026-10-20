@@ -1,0 +1,74 @@
+sequenceDiagram
+    autonumber
+    actor Operator
+    participant Agent as Application or agent
+    participant Client as Local CLI client
+    participant Daemon as Foreground daemon
+    participant Watchdog as Lease watchdog thread
+    participant Broker as Credential broker
+    participant Discord as Gateway and REST
+    participant State as Capture and consumer stores
+
+    Operator->>Daemon: Start serve with fixed scope and state directory
+    Daemon->>Broker: Request exact-purpose memory lease
+    Broker-->>Daemon: Fixed absolute lease deadline
+    Daemon->>Watchdog: Arm original SDK lease before Gateway startup
+    Daemon->>Discord: Verify bot and channel scope, start Gateway
+    Daemon->>State: Restore snapshots and repair completed publication
+
+    Discord-->>Daemon: Ready, Resume, or selected-channel message-create hint
+    Daemon->>Daemon: Coalesce pending capture notification
+    Daemon->>Discord: Read authoritative messages with bounded REST pages
+    Discord-->>Daemon: Messages and referenced reply data
+    Daemon->>Daemon: Check author, structured bot mention, and reply identity
+    Note over Daemon,State: References, quotes, and attachments remain context
+    alt First initialization without backfill
+        Daemon->>State: Save newest-message baseline and ignore existing history
+    else Saved checkpoint or explicit initial backfill
+        loop Bounded sweeps until saved lower boundary is covered
+            Daemon->>State: Commit candidates and exact resume progress together
+        end
+        Daemon->>State: Commit completed coverage
+    end
+    Daemon->>State: Publish completed outbox with source-ID deduplication
+
+    Operator->>Client: Create named consumer from now or oldest
+    Client->>Daemon: Verified local named-pipe request
+    Daemon->>State: Register independent cursor at a complete boundary
+    Agent->>Client: Run next and await its process
+    Client->>Daemon: Request UUID and consumer name
+    alt Another waiter is active
+        Daemon-->>Client: busy, no payload
+    else Request already completed
+        Daemon-->>Client: already-completed, no payload
+    else Claim awaits acknowledgment
+        Daemon-->>Client: pending-ack metadata
+    else Eligible event arrives
+        Daemon->>State: Commit event, sequence, delivery ID, and request claim
+        Daemon-->>Client: Matched delivery
+        Client-->>Agent: Write and flush one JSON result, then exit
+    end
+    Note over Agent,State: Output, exit, and disconnect do not acknowledge handling
+
+    opt Handling completed
+        Agent->>Agent: Handle event within separately authorized scope
+        Agent->>Client: Ack exact event and delivery with a receipt
+        Client->>Daemon: Local acknowledgment request
+        Daemon->>State: Record receipt, advance this cursor, clear claim
+        Daemon-->>Client: Acknowledged
+    end
+    opt Outcome is uncertain
+        Agent->>Client: Inspect claim and reconcile external handling
+        Agent->>Client: Explicitly replay exact delivery if needed
+        Client->>Daemon: Replay request
+        Daemon-->>Client: Original payload and delivery ID
+    end
+
+    Watchdog->>Watchdog: Original SDK lease becomes invalid
+    Watchdog->>Daemon: Exit process with code 3
+    Daemon--xClient: IPC closes with live capture
+    Client-->>Agent: Connected client reports approval-required
+    Operator->>Daemon: Explicit offline restart with the same scope
+    Daemon->>State: Restore retained captures, claims, and receipts
+    Note over Client,State: Offline clients need no Discord credential; empty next returns offline
+    Operator->>Daemon: Explicit regular restart to resume live capture and approval

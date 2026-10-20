@@ -1,3 +1,3 @@
-fn main() -> eyre::Result<()> {
-    teamy_discord_archive::main()
+fn main() -> std::process::ExitCode {
+    teamy_discord::entrypoint()
 }

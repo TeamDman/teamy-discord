@@ -1,6 +1,5 @@
 use directories_next::ProjectDirs;
 use eyre::bail;
-use std::env;
 use std::ops::Deref;
 use std::path::Path;
 use std::path::PathBuf;
@@ -48,7 +47,9 @@ impl AppHome {
     /// This function will return an error if the config directory cannot be determined.
     // cli[impl path.app-home.env-overrides-platform]
     pub fn resolve() -> eyre::Result<AppHome> {
-        if let Ok(override_dir) = env::var(super::APP_HOME_ENV_VAR) {
+        if let Some(override_dir) =
+            super::environment_preference(super::APP_HOME_ENV_VAR, super::LEGACY_APP_HOME_ENV_VAR)
+        {
             return Ok(AppHome(PathBuf::from(override_dir)));
         }
         if let Some(project_dirs) = ProjectDirs::from("", "TeamDman", super::APP_HOME_DIR_NAME) {

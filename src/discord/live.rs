@@ -16,7 +16,7 @@ const GUILD_MEMBERS_PAGE_LIMIT: u64 = 1_000;
 const DISCORD_EPOCH_MILLIS: i64 = 1_420_070_400_000;
 const DEFAULT_MESSAGE_LIMIT: u8 = 100;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct LiveDiscordClientConfig {
     pub token: String,
 }
@@ -86,14 +86,17 @@ pub fn parse_before_datetime(before: Option<&str>) -> eyre::Result<Option<DateTi
 
 /// # Errors
 ///
-/// This function will return an error if the timestamp predates the Discord epoch.
+/// This function will return an error if the timestamp cannot produce a nonzero Discord message ID.
 pub fn before_datetime_to_message_id(before: DateTime<Utc>) -> eyre::Result<MessageId> {
     let timestamp_millis = before.timestamp_millis();
-    if timestamp_millis < DISCORD_EPOCH_MILLIS {
-        bail!("--before must not be earlier than the Discord epoch")
+    if timestamp_millis <= DISCORD_EPOCH_MILLIS {
+        bail!("--before must be later than the Discord epoch")
     }
 
-    let snowflake = (timestamp_millis - DISCORD_EPOCH_MILLIS).cast_unsigned() << 22;
+    let snowflake = (timestamp_millis - DISCORD_EPOCH_MILLIS)
+        .cast_unsigned()
+        .checked_mul(1 << 22)
+        .ok_or_else(|| eyre::eyre!("--before exceeds the Discord message ID timestamp range"))?;
     Ok(MessageId::new(snowflake))
 }
 
@@ -153,6 +156,14 @@ pub fn normalize_user_limit(limit: Option<u64>) -> u64 {
         .clamp(1, GUILD_MEMBERS_PAGE_LIMIT)
 }
 
+impl std::fmt::Debug for LiveDiscordClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveDiscordClientConfig")
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::DISCORD_EPOCH_MILLIS;
@@ -167,8 +178,10 @@ mod tests {
     #[test]
     // cli[verify live.message.target-selection]
     fn resolve_message_target_requires_exactly_one_id() {
-        assert!(resolve_message_target(None, None).is_err());
-        assert!(resolve_message_target(Some(1), Some(2)).is_err());
+        let error = resolve_message_target(None, None).unwrap_err();
+        assert!(error.to_string().contains("exactly one"));
+        let error = resolve_message_target(Some(1), Some(2)).unwrap_err();
+        assert!(error.to_string().contains("not both"));
         assert_eq!(
             resolve_message_target(Some(42), None)
                 .expect("channel id should resolve")
@@ -206,6 +219,39 @@ mod tests {
             .expect("timestamp should parse")
             .expect("timestamp should exist");
         assert_eq!(parsed.to_rfc3339(), "2024-01-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn before_datetime_rejects_epoch_and_earlier_without_panicking() {
+        for timestamp in [DISCORD_EPOCH_MILLIS - 1, DISCORD_EPOCH_MILLIS] {
+            let before = Utc.timestamp_millis_opt(timestamp).single().unwrap();
+            let _redacted_error = before_datetime_to_message_id(before).unwrap_err();
+        }
+        let first = Utc
+            .timestamp_millis_opt(DISCORD_EPOCH_MILLIS + 1)
+            .single()
+            .unwrap();
+        assert_eq!(before_datetime_to_message_id(first).unwrap().get(), 1 << 22);
+    }
+
+    #[test]
+    fn before_datetime_rejects_snowflake_overflow_without_truncation() {
+        let last_offset = i64::try_from(u64::MAX >> 22).unwrap();
+        let last = Utc
+            .timestamp_millis_opt(DISCORD_EPOCH_MILLIS + last_offset)
+            .single()
+            .unwrap();
+        assert_eq!(
+            before_datetime_to_message_id(last).unwrap().get(),
+            (u64::MAX >> 22) << 22
+        );
+        let overflow = Utc
+            .timestamp_millis_opt(DISCORD_EPOCH_MILLIS + last_offset + 1)
+            .single()
+            .unwrap();
+        let _redacted_error = before_datetime_to_message_id(overflow).unwrap_err();
+        let far_future = Utc.with_ymd_and_hms(9999, 1, 1, 0, 0, 0).single().unwrap();
+        let _redacted_error = before_datetime_to_message_id(far_future).unwrap_err();
     }
 
     #[test]

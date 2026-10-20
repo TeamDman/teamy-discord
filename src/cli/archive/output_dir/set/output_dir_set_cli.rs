@@ -1,0 +1,39 @@
+use arbitrary::Arbitrary;
+use eyre::Result;
+use facet::Facet;
+use figue::{self as args};
+
+/// Persist the default output directory.
+#[derive(Facet, Arbitrary, Debug, PartialEq)]
+pub struct OutputDirSetArgs {
+    /// The path to persist as the default output directory.
+    #[facet(args::positional)]
+    pub path: String,
+}
+
+impl OutputDirSetArgs {
+    /// # Errors
+    ///
+    /// This function will return an error if the preference cannot be written.
+    // cli[impl path.output-dir.set-persists-default]
+    pub fn persist(self, app_home: &crate::paths::AppHome) -> Result<()> {
+        let path = std::path::PathBuf::from(self.path);
+        crate::paths::save_output_dir_preference(app_home, path.as_path())?;
+        println!("{}", path.display());
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// This function will return an error if the preference cannot be written.
+    pub async fn invoke(self) -> Result<crate::cli::output::CliOutput> {
+        let threshold = Some(std::time::Duration::from_secs(1));
+        self.invoke_work().await?;
+        Ok(crate::cli::output::CliOutput::none(threshold))
+    }
+
+    #[expect(clippy::unused_async)]
+    async fn invoke_work(self) -> Result<()> {
+        self.persist(&crate::paths::APP_HOME)
+    }
+}
